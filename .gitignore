@@ -1,0 +1,35 @@
+ # Xcode
+ *.xcworkspace/xcuserdata/
+ *.xcodeproj/xcuserdata/
+ *.xcodeproj/project.xcworkspace/
+ *.xcuserstate
+ *.moved-aside
+ DerivedData/
+ .build/
+ *.ipa
+ *.dSYM.zip
+ *.dSYM
+ 
+ # Swift Package Manager
+ .swiftpm/
+ Package.resolved
+ 
+ # macOS
+ .DS_Store
+ ._*
+ *.swp
+ *.swo
+ 
+ # Playgrounds
+ *.playground/ xcuserdata/
+ 
+ # CocoaPods
+ Pods/
+ 
+ # Fastlane
+ fastlane/report.xml
+ fastlane/test_output
+ 
+ # Env
+ .env
+ .env.local
