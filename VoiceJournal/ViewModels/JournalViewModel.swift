@@ -1,4 +1,4 @@
- import Foundation
+﻿ import Foundation
  import SwiftUI
  import AVFoundation
  
@@ -17,7 +17,7 @@
      var isAuthorized = false
      var entries: [JournalEntry] = []
      
-     // MARK: - Services (not @Observable — no NSObject conflict)
+     // MARK: - Services (not @Observable 鈥?no NSObject conflict)
      private let speechService = SpeechService()
      private let audioRecorder = AudioRecorder()
      private let sentimentAnalyzer = SentimentAnalyzer()
@@ -56,14 +56,32 @@
      }
      
      // MARK: - Recording
-     func startRecording() {
+     var entriesToday: Int {
+    let cal = Calendar.current
+    let today = cal.startOfDay(for: Date())
+    return entries.filter { cal.isDate(.safeDate, inSameDayAs: today) }.count
+}
+
+var canRecord: Bool {
+    StoreManager.shared.canRecordToday(entriesToday: entriesToday)
+}
+
+var todayLimitReached: Bool {
+    !StoreManager.shared.isPro && entriesToday >= StoreManager.shared.freeDailyLimit
+}
+
+func startRecording() {
+    guard canRecord else {
+        errorMessage = "Daily limit reached. Upgrade to Pro for unlimited entries."
+        return
+    }
          guard isAuthorized else {
              errorMessage = "Microphone and speech recognition permissions required"
              return
          }
          
          do {
-             // Centralize AVAudioSession config — single point, correct category
+             // Centralize AVAudioSession config 鈥?single point, correct category
              let session = AVAudioSession.sharedInstance()
              try session.setCategory(.record, mode: .measurement, options: .duckOthers)
              try session.setActive(true, options: .notifyOthersOnDeactivation)
@@ -177,3 +195,17 @@
          return words.prefix(6).joined(separator: " ") + "..."
      }
  }
+    func exportCSV() -> URL? {
+        ExportService.exportToCSV(entries: entries)
+    }
+
+    func exportJSON() -> URL? {
+        ExportService.exportToJSON(entries: entries)
+    }
+
+    func addTagsToEntry(_ entry: JournalEntry, tags: [String]) {
+        for tag in tags { entry.addTag(tag) }
+        try? PersistenceController.shared.container.viewContext.save()
+        refreshEntries()
+    }
+

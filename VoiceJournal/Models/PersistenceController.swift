@@ -65,6 +65,12 @@
         updatedAtProp.attributeType = .dateAttributeType
         updatedAtProp.isOptional = true
         properties.append(updatedAtProp)
+        let tagsProp = NSAttributeDescription()
+        tagsProp.name = "tags"
+        tagsProp.attributeType = .stringAttributeType
+        tagsProp.isOptional = true
+        tagsProp.defaultValue = ""
+        properties.append(tagsProp)
         
         entryEntity.properties = properties
         model.entities = [entryEntity]
@@ -144,4 +150,5 @@ init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
          return controller
      }()
  }
+
 
