@@ -1,10 +1,10 @@
- import CoreData
+﻿ import CoreData
  
  /// Core Data stack with CloudKit sync.
  /// Configure App Groups + set `sharedContainerURL` in init for widget data sharing.
  struct PersistenceController {
      static let shared = PersistenceController()
-     static let appGroupIdentifier = "group.com.yourname.VoiceJournal"  // ← MUST set in Xcode
+     static let appGroupIdentifier = "group.com.yourname.VoiceJournal"  // 鈫?MUST set in Xcode
      
      let container: NSPersistentCloudKitContainer
      
@@ -33,7 +33,7 @@
          
          container.loadPersistentStores { _, error in
              if let error = error as NSError? {
-                 print("⚠️ CloudKit not available, falling back: \(error.localizedDescription)")
+                 print("鈿狅笍 CloudKit not available, falling back: \(error.localizedDescription)")
              }
          }
          
@@ -50,7 +50,7 @@
              try context.save()
              return true
          } catch {
-             print("⚠️ Core Data save failed: \(error.localizedDescription)")
+             print("鈿狅笍 Core Data save failed: \(error.localizedDescription)")
              return false
          }
      }

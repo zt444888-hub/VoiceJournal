@@ -1,10 +1,10 @@
- import Foundation
+﻿ import Foundation
  import Speech
  import AVFoundation
  
  /// Handles on-device speech-to-text transcription using Apple's Speech framework.
  /// All processing happens locally on the device - no network calls.
- /// NOT marked @Observable (inherits NSObject for delegate) — JournalViewModel bridges state.
+ /// NOT marked @Observable (inherits NSObject for delegate) 鈥?JournalViewModel bridges state.
  class SpeechService: NSObject {
      private let audioEngine = AVAudioEngine()
      private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -16,7 +16,7 @@
      var onError: ((String) -> Void)?
      
      override init() {
-         self.recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+         self.recognizer = SFSpeechRecognizer(locale: Locale.current)
          super.init()
          recognizer?.delegate = self
      }
@@ -74,7 +74,7 @@
          }
      }
      
-     /// Internal cleanup — does not deactivate session (AudioRecorder may still be active)
+     /// Internal cleanup 鈥?does not deactivate session (AudioRecorder may still be active)
      private func stopInternal() {
          audioEngine.stop()
          audioEngine.inputNode.removeTap(onBus: 0)
