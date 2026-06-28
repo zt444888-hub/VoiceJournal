@@ -8,8 +8,70 @@
      
      let container: NSPersistentCloudKitContainer
      
-     init(inMemory: Bool = false) {
-         container = NSPersistentCloudKitContainer(name: "VoiceJournal")
+         private static func createProgrammaticModel() -> NSManagedObjectModel {
+        let model = NSManagedObjectModel()
+        let entryEntity = NSEntityDescription()
+        entryEntity.name = "JournalEntry"
+        entryEntity.managedObjectClassName = "JournalEntry"
+        
+        var properties: [NSPropertyDescription] = []
+        
+        let idProp = NSAttributeDescription()
+        idProp.name = "id"
+        idProp.attributeType = .UUIDAttributeType
+        idProp.isOptional = true
+        properties.append(idProp)
+        
+        let titleProp = NSAttributeDescription()
+        titleProp.name = "title"
+        titleProp.attributeType = .stringAttributeType
+        titleProp.isOptional = true
+        properties.append(titleProp)
+        
+        let transcriptProp = NSAttributeDescription()
+        transcriptProp.name = "transcriptText"
+        transcriptProp.attributeType = .stringAttributeType
+        transcriptProp.isOptional = true
+        properties.append(transcriptProp)
+        
+        let audioProp = NSAttributeDescription()
+        audioProp.name = "audioFileName"
+        audioProp.attributeType = .stringAttributeType
+        audioProp.isOptional = true
+        properties.append(audioProp)
+        
+        let sentimentProp = NSAttributeDescription()
+        sentimentProp.name = "sentimentScore"
+        sentimentProp.attributeType = .doubleAttributeType
+        sentimentProp.isOptional = false
+        sentimentProp.defaultValue = 0.0
+        properties.append(sentimentProp)
+        
+        let durationProp = NSAttributeDescription()
+        durationProp.name = "duration"
+        durationProp.attributeType = .doubleAttributeType
+        durationProp.isOptional = false
+        durationProp.defaultValue = 0.0
+        properties.append(durationProp)
+        
+        let createdAtProp = NSAttributeDescription()
+        createdAtProp.name = "createdAt"
+        createdAtProp.attributeType = .dateAttributeType
+        createdAtProp.isOptional = true
+        properties.append(createdAtProp)
+        
+        let updatedAtProp = NSAttributeDescription()
+        updatedAtProp.name = "updatedAt"
+        updatedAtProp.attributeType = .dateAttributeType
+        updatedAtProp.isOptional = true
+        properties.append(updatedAtProp)
+        
+        entryEntity.properties = properties
+        model.entities = [entryEntity]
+        return model
+    }
+init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
+         container = NSPersistentCloudKitContainer(name: "VoiceJournal", managedObjectModel: Self.createProgrammaticModel())
          
          guard let description = container.persistentStoreDescriptions.first else {
              fatalError("No persistent store description")
@@ -82,3 +144,4 @@
          return controller
      }()
  }
+
