@@ -1,10 +1,8 @@
-﻿ import Foundation
+ import Foundation
  import Speech
  import AVFoundation
  
- /// Handles on-device speech-to-text transcription using Apple's Speech framework.
- /// All processing happens locally on the device - no network calls.
- /// NOT marked @Observable (inherits NSObject for delegate) 鈥?JournalViewModel bridges state.
+ /// On-device speech-to-text. Smarter locale: prefers en-* from user settings, falls back to en-US.
  class SpeechService: NSObject {
      private let audioEngine = AVAudioEngine()
      private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -16,7 +14,14 @@
      var onError: ((String) -> Void)?
      
      override init() {
-         self.recognizer = SFSpeechRecognizer(locale: Locale.current)
+         // Prefer the user's English locale (en-GB, en-AU, en-IN, etc.), fall back to en-US
+         if let preferred = Locale.preferredLanguages.first.map({ Locale(identifier: $0) }),
+            preferred.languageCode == "en",
+            let recognizer = SFSpeechRecognizer(locale: preferred) {
+             self.recognizer = recognizer
+         } else {
+             self.recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+         }
          super.init()
          recognizer?.delegate = self
      }
@@ -40,9 +45,9 @@
          recognitionTask = nil
          
          if !audioSessionPreconfigured {
-             let audioSession = AVAudioSession.sharedInstance()
-             try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+             let session = AVAudioSession.sharedInstance()
+             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+             try session.setActive(true, options: .notifyOthersOnDeactivation)
          }
          
          recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -74,7 +79,6 @@
          }
      }
      
-     /// Internal cleanup 鈥?does not deactivate session (AudioRecorder may still be active)
      private func stopInternal() {
          audioEngine.stop()
          audioEngine.inputNode.removeTap(onBus: 0)
@@ -93,7 +97,7 @@
      }
  }
  
- // MARK: - SFSpeechRecognizerDelegate
+ // MARK: - Delegate
  extension SpeechService: SFSpeechRecognizerDelegate {
      func speechRecognizer(_ speechRecognizer: SFSpeechRecognizer, availabilityDidChange available: Bool) {
          if !available {

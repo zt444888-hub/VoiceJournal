@@ -1,14 +1,13 @@
-﻿ import Foundation
+ import Foundation
  import SwiftUI
  import AVFoundation
  
- /// Single source of truth for all journal-related state.
- /// Bridges values from non-observable services into @Observable properties.
+ /// Single source of truth. Bridges non-observable services into @Observable properties.
  @MainActor
  @Observable
  class JournalViewModel {
      
-     // MARK: - Observable state (views bind to these, never to inner services)
+     // MARK: - Observable state
      var isRecording = false
      var isProcessing = false
      var liveTranscript = ""
@@ -16,35 +15,37 @@
      var errorMessage: String?
      var isAuthorized = false
      var entries: [JournalEntry] = []
+     var isCloudKitAvailable = true
      
-     // MARK: - Services (not @Observable 鈥?no NSObject conflict)
+     // MARK: - Services
      private let speechService = SpeechService()
      private let audioRecorder = AudioRecorder()
      private let sentimentAnalyzer = SentimentAnalyzer()
-     private let storage: StorageService
+     let storage: StorageService
      private lazy var summaryGenerator = SummaryGenerator(storage: storage)
      private let notificationService = NotificationService()
      
-     private var durationTimer: Timer?
+     private var lastEntryCount = 0
      
      init(storage: StorageService = StorageService()) {
          self.storage = storage
          
-         // Bridge speech updates
+         // Bridge updates from non-observable services
          speechService.onTranscriptUpdate = { [weak self] text in
              self?.liveTranscript = text
          }
          speechService.onError = { [weak self] msg in
              self?.errorMessage = msg
          }
-         
-         // Bridge audio duration updates
          audioRecorder.onUpdate = { [weak self] duration in
              self?.recordingDuration = duration
          }
          audioRecorder.onError = { [weak self] msg in
              self?.errorMessage = msg
          }
+         
+         // Track CloudKit availability
+         isCloudKitAvailable = PersistenceController.isCloudKitAvailable()
      }
      
      // MARK: - Permissions
@@ -56,32 +57,13 @@
      }
      
      // MARK: - Recording
-     var entriesToday: Int {
-    let cal = Calendar.current
-    let today = cal.startOfDay(for: Date())
-    return entries.filter { cal.isDate(.safeDate, inSameDayAs: today) }.count
-}
-
-var canRecord: Bool {
-    StoreManager.shared.canRecordToday(entriesToday: entriesToday)
-}
-
-var todayLimitReached: Bool {
-    !StoreManager.shared.isPro && entriesToday >= StoreManager.shared.freeDailyLimit
-}
-
-func startRecording() {
-    guard canRecord else {
-        errorMessage = "Daily limit reached. Upgrade to Pro for unlimited entries."
-        return
-    }
+     func startRecording() {
          guard isAuthorized else {
              errorMessage = "Microphone and speech recognition permissions required"
              return
          }
          
          do {
-             // Centralize AVAudioSession config 鈥?single point, correct category
              let session = AVAudioSession.sharedInstance()
              try session.setCategory(.record, mode: .measurement, options: .duckOthers)
              try session.setActive(true, options: .notifyOthersOnDeactivation)
@@ -90,10 +72,8 @@ func startRecording() {
              recordingDuration = 0
              errorMessage = nil
              
-             // Start both services (pass flag so they don't re-configure the session)
              try audioRecorder.startRecording()
              try speechService.startRecording(audioSessionPreconfigured: true)
-             
              isRecording = true
          } catch {
              errorMessage = "Failed to start recording: \(error.localizedDescription)"
@@ -106,7 +86,6 @@ func startRecording() {
          let audioURL = audioRecorder.stopRecording()
          isRecording = false
          
-         // Deactivate the shared session once, after both services are done
          try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
          
          guard !liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -117,17 +96,14 @@ func startRecording() {
          
          isProcessing = true
          
-         // Analyze and save
          let sentiment = sentimentAnalyzer.analyzeSentiment(liveTranscript)
          let title = generateTitle(from: liveTranscript)
          let audioFileName = audioURL?.lastPathComponent
          
          _ = storage.createEntry(
-             title: title,
-             transcript: liveTranscript,
+             title: title, transcript: liveTranscript,
              audioFileName: audioFileName,
-             sentimentScore: sentiment,
-             duration: recordingDuration
+             sentimentScore: sentiment, duration: recordingDuration
          )
          
          refreshEntries()
@@ -148,7 +124,11 @@ func startRecording() {
      
      // MARK: - Entry CRUD
      func refreshEntries() {
-         entries = storage.fetchAllEntries()
+         let newEntries = storage.fetchAllEntries()
+         if newEntries.count != lastEntryCount {
+             entries = newEntries
+             lastEntryCount = entries.count
+         }
      }
      
      func deleteEntry(_ entry: JournalEntry) {
@@ -162,6 +142,12 @@ func startRecording() {
          }
          storage.updateEntry(entry, title: title, transcript: transcript)
          refreshEntries()
+     }
+     
+     /// Removes audio files not referenced by any entry (prevents orphan accumulation)
+     func cleanOrphanedAudioFiles() {
+         let activeFiles = Set(storage.fetchAllEntries().compactMap(\.audioFileName))
+         AudioRecorder.cleanOrphanedAudioFiles(activeFileNames: activeFiles)
      }
      
      // MARK: - Insights
@@ -195,17 +181,3 @@ func startRecording() {
          return words.prefix(6).joined(separator: " ") + "..."
      }
  }
-    func exportCSV() -> URL? {
-        ExportService.exportToCSV(entries: entries)
-    }
-
-    func exportJSON() -> URL? {
-        ExportService.exportToJSON(entries: entries)
-    }
-
-    func addTagsToEntry(_ entry: JournalEntry, tags: [String]) {
-        for tag in tags { entry.addTag(tag) }
-        try? PersistenceController.shared.container.viewContext.save()
-        refreshEntries()
-    }
-

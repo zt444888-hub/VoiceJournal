@@ -1,11 +1,8 @@
-﻿ import SwiftUI
+ import SwiftUI
  
- /// Minimum deployment: iOS 17.0 (required by @Observable, Swift Charts, Layout protocol)
+ /// Minimum deployment: iOS 17.0
  @main
  struct VoiceJournalApp: App {
-    @State private var store = StoreManager.shared
-    init() { Task { await StoreManager.shared.loadProduct() } }
-
      @State private var journalVM = JournalViewModel()
      
      var body: some Scene {
@@ -13,8 +10,7 @@
              ContentView()
                  .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                  .environment(journalVM)
-                 .environment(store)
-            .onAppear {
+                 .onAppear {
                      UNUserNotificationCenter.current().requestAuthorization(
                          options: [.alert, .sound, .badge]
                      ) { _, _ in }
@@ -44,4 +40,3 @@
          .tint(.accentColor)
      }
  }
-

@@ -1,7 +1,7 @@
  import Foundation
  import SwiftUI
  
- /// Statistics derived from Core Data entries. Call `refresh()` when entries change.
+ /// Statistics derived from Core Data entries. Shares `storage` with JournalViewModel.
  @MainActor
  @Observable
  class StatsViewModel {
@@ -17,18 +17,18 @@
      var streakDays: Int = 0
      var topKeywords: [String] = []
      
-     init(storage: StorageService = StorageService()) {
+     init(storage: StorageService) {
          self.storage = storage
      }
      
-     /// Recalculates all stats from scratch. Call after any entry mutation.
      func refresh() {
          let allEntries = storage.fetchAllEntries()
          
          totalEntries = allEntries.count
          totalDuration = allEntries.map(\.duration).reduce(0, +)
          totalWords = allEntries.map { $0.safeTranscript.split(separator: " ").count }.reduce(0, +)
-         averageSentiment = allEntries.isEmpty ? 0 : allEntries.map(\.sentimentScore).reduce(0, +) / Double(allEntries.count)
+         averageSentiment = allEntries.isEmpty ? 0
+             : allEntries.map(\.sentimentScore).reduce(0, +) / Double(allEntries.count)
          
          sentimentHistory = storage.sentimentHistory(days: 30)
          weeklyData = storage.weekSummaries()

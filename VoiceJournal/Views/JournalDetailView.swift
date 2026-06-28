@@ -19,21 +19,14 @@
      var body: some View {
          ScrollView {
              VStack(alignment: .leading, spacing: 20) {
-                 // Header
                  headerSection
                  
-                 // Audio playback
                  if entry.audioFileName != nil {
                      audioPlaybackSection
                  }
                  
-                 // Transcript
                  transcriptSection
-                 
-                 // AI Insights
                  insightsSection
-                 
-                 // Metadata
                  metadataSection
              }
              .padding()
@@ -50,9 +43,12 @@
                  }
              }
          }
+         .onAppear {
+             editedTitle = entry.safeTitle
+             editedTranscript = entry.safeTranscript
+         }
          .onDisappear {
-             audioPlayer?.stop()
-             playbackTimer?.invalidate()
+             stopPlayback()
          }
      }
      
@@ -60,36 +56,29 @@
      private var headerSection: some View {
          VStack(alignment: .leading, spacing: 8) {
              HStack {
-                 Text(entry.sentimentEmoji)
-                     .font(.largeTitle)
-                 
+                 Text(entry.sentimentEmoji).font(.largeTitle)
                  if isEditing {
                      TextField("Title", text: $editedTitle)
                          .textFieldStyle(.roundedBorder)
                          .font(.title2.bold())
                  } else {
                      Text(entry.safeTitle)
-                         .font(.title2)
-                         .fontWeight(.bold)
+                         .font(.title2).fontWeight(.bold)
                  }
              }
-             
              Text(entry.formattedDate)
-                 .font(.subheadline)
-                 .foregroundColor(.secondary)
+                 .font(.subheadline).foregroundColor(.secondary)
          }
      }
      
      // MARK: - Audio Playback
      private var audioPlaybackSection: some View {
          VStack(spacing: 12) {
-             // Playback progress bar
              GeometryReader { geo in
                  ZStack(alignment: .leading) {
                      Rectangle()
                          .fill(Color(.systemGray5))
                          .frame(height: 4)
-                     
                      Rectangle()
                          .fill(Color.accentColor)
                          .frame(width: geo.size.width * playbackProgress, height: 4)
@@ -108,13 +97,10 @@
                  .buttonStyle(.plain)
                  
                  Text(entry.formattedDuration)
-                     .font(.caption)
-                     .foregroundColor(.secondary)
+                     .font(.caption).foregroundColor(.secondary)
                  
                  Spacer()
-                 
-                 Image(systemName: "waveform")
-                     .foregroundColor(.secondary)
+                 Image(systemName: "waveform").foregroundColor(.secondary)
              }
          }
          .padding()
@@ -125,8 +111,7 @@
      // MARK: - Transcript
      private var transcriptSection: some View {
          VStack(alignment: .leading, spacing: 8) {
-             Label("Transcript", systemImage: "text.quote")
-                 .font(.headline)
+             Label("Transcript", systemImage: "text.quote").font(.headline)
              
              if isEditing {
                  TextEditor(text: $editedTranscript)
@@ -136,8 +121,7 @@
                      .clipShape(RoundedRectangle(cornerRadius: 8))
              } else {
                  Text(entry.safeTranscript)
-                     .font(.body)
-                     .lineSpacing(6)
+                     .font(.body).lineSpacing(6)
              }
          }
      }
@@ -145,31 +129,19 @@
      // MARK: - AI Insights
      private var insightsSection: some View {
          VStack(alignment: .leading, spacing: 12) {
-             Label("AI Insights", systemImage: "sparkles")
-                 .font(.headline)
+             Label("AI Insights", systemImage: "sparkles").font(.headline)
              
-             let insights = sentimentAnalyzer.generateInsight(from: entry.safeTranscript)
-             
-             Text(insights)
+             Text(sentimentAnalyzer.generateInsight(from: entry.safeTranscript))
                  .font(.subheadline)
                  .foregroundColor(.secondary)
              
-             // Mood bar
              VStack(alignment: .leading, spacing: 4) {
-                 Text("Mood")
-                     .font(.caption)
-                     .foregroundColor(.secondary)
-                 
+                 Text("Mood").font(.caption).foregroundColor(.secondary)
                  GeometryReader { geo in
                      ZStack(alignment: .leading) {
                          Rectangle()
-                             .fill(
-                                 LinearGradient(
-                                     colors: [.red, .orange, .yellow, .green],
-                                     startPoint: .leading,
-                                     endPoint: .trailing
-                                 )
-                             )
+                             .fill(LinearGradient(colors: [.red, .orange, .yellow, .green],
+                                                  startPoint: .leading, endPoint: .trailing))
                              .frame(height: 8)
                              .clipShape(Capsule())
                          
@@ -191,9 +163,7 @@
      // MARK: - Metadata
      private var metadataSection: some View {
          VStack(alignment: .leading, spacing: 8) {
-             Label("Details", systemImage: "info.circle")
-                 .font(.headline)
-             
+             Label("Details", systemImage: "info.circle").font(.headline)
              HStack {
                  detailItem(label: "Duration", value: entry.formattedDuration)
                  Spacer()
@@ -206,12 +176,8 @@
      
      private func detailItem(label: String, value: String) -> some View {
          VStack(spacing: 2) {
-             Text(label)
-                 .font(.caption2)
-                 .foregroundColor(.secondary)
-             Text(value)
-                 .font(.caption)
-                 .fontWeight(.medium)
+             Text(label).font(.caption2).foregroundColor(.secondary)
+             Text(value).font(.caption).fontWeight(.medium)
          }
      }
      
@@ -221,22 +187,25 @@
                let url = AudioRecorder.playbackURL(for: fileName) else { return }
          
          if isPlaying {
-             audioPlayer?.pause()
-             isPlaying = false
-             playbackTimer?.invalidate()
+             pausePlayback()
          } else {
              do {
+                 // Configure audio session for playback (was .record during recording)
+                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+                 try AVAudioSession.sharedInstance().setActive(true)
+                 
                  if audioPlayer == nil {
                      audioPlayer = try AVAudioPlayer(contentsOf: url)
                      audioPlayer?.prepareToPlay()
+                     audioPlayer?.delegate = self
                  }
                  audioPlayer?.play()
                  isPlaying = true
                  
+                 playbackTimer?.invalidate()
                  playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
                      guard let player = audioPlayer, player.isPlaying else {
-                         isPlaying = false
-                         playbackTimer?.invalidate()
+                         stopPlayback()
                          return
                      }
                      playbackProgress = player.currentTime / player.duration
@@ -246,4 +215,37 @@
              }
          }
      }
+     
+     private func pausePlayback() {
+         audioPlayer?.pause()
+         isPlaying = false
+         playbackTimer?.invalidate()
+         playbackTimer = nil
+     }
+     
+     private func stopPlayback() {
+         audioPlayer?.stop()
+         audioPlayer = nil
+         isPlaying = false
+         playbackTimer?.invalidate()
+         playbackTimer = nil
+         playbackProgress = 0
+         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+     }
+ }
+ 
+ // MARK: - AVAudioPlayerDelegate
+ extension JournalDetailView: AVAudioPlayerDelegate {
+     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+         stopPlayback()
+     }
+ }
+ 
+ // MARK: - Preview
+ #Preview("With entry") {
+     let preview = PersistenceController.preview
+     let entry = preview.container.viewContext
+         .registeredObjects.compactMap { $0 as? JournalEntry }.first!
+     JournalDetailView(entry: entry)
+         .environment(JournalViewModel(storage: StorageService(context: preview.container.viewContext)))
  }

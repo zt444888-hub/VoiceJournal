@@ -4,7 +4,7 @@
  /// Statistics and insights: mood chart, streak, weekly summaries, keyword tags.
  struct StatsView: View {
      @Environment(JournalViewModel.self) private var journalVM
-     @State private var statsVM = StatsViewModel()
+     @State private var statsVM: StatsViewModel?
      @State private var selectedTimeRange: TimeRange = .week
      
      enum TimeRange: String, CaseIterable {
@@ -22,13 +22,17 @@
          NavigationStack {
              ScrollView {
                  VStack(spacing: 20) {
-                     if statsVM.totalEntries == 0 {
-                         emptyState
+                     if let svm = statsVM {
+                         if svm.totalEntries == 0 {
+                             emptyState
+                         } else {
+                             summaryCards(svm: svm)
+                             moodChartSection(svm: svm)
+                             weeklySummarySection(svm: svm)
+                             if !svm.topKeywords.isEmpty { keywordsSection(svm: svm) }
+                         }
                      } else {
-                         summaryCards
-                         moodChartSection
-                         weeklySummarySection
-                         if !statsVM.topKeywords.isEmpty { keywordsSection }
+                         emptyState
                      }
                  }
                  .padding()
@@ -36,15 +40,17 @@
              .navigationTitle("Insights")
              .toolbar {
                  ToolbarItem(placement: .navigationBarTrailing) {
-                     Button("Refresh") { statsVM.refresh() }
+                     Button("Refresh") { statsVM?.refresh() }
                  }
              }
              .onAppear {
-                 statsVM.refresh()
+                 if statsVM == nil {
+                     statsVM = StatsViewModel(storage: journalVM.storage)
+                 }
+                 statsVM?.refresh()
              }
-             // Reactively refresh whenever entries change
              .onChange(of: journalVM.entries.count) { _, _ in
-                 statsVM.refresh()
+                 statsVM?.refresh()
              }
          }
      }
@@ -52,8 +58,7 @@
      private var emptyState: some View {
          VStack(spacing: 16) {
              Image(systemName: "chart.bar.xaxis")
-                 .font(.system(size: 48))
-                 .foregroundColor(.secondary)
+                 .font(.system(size: 48)).foregroundColor(.secondary)
              Text("No data yet").font(.title3).foregroundColor(.secondary)
              Text("Record some journal entries to see insights")
                  .font(.subheadline).foregroundColor(.tertiary)
@@ -61,18 +66,16 @@
          .frame(maxWidth: .infinity).padding(.vertical, 60)
      }
      
-     // MARK: - Summary Cards
-     private var summaryCards: some View {
+     private func summaryCards(svm: StatsViewModel) -> some View {
          LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-             StatCard(title: "Total Entries", value: "\(statsVM.totalEntries)", icon: "book.fill")
-             StatCard(title: "Streak", value: "\(statsVM.streakDays) days", icon: "flame.fill")
-             StatCard(title: "Total Time", value: formatDuration(statsVM.totalDuration), icon: "clock.fill")
-             StatCard(title: "Avg Mood", value: formatSentiment(statsVM.averageSentiment), icon: "heart.fill")
+             StatCard(title: "Total Entries", value: "\(svm.totalEntries)", icon: "book.fill")
+             StatCard(title: "Streak", value: "\(svm.streakDays) days", icon: "flame.fill")
+             StatCard(title: "Total Time", value: formatDuration(svm.totalDuration), icon: "clock.fill")
+             StatCard(title: "Avg Mood", value: formatSentiment(svm.averageSentiment), icon: "heart.fill")
          }
      }
      
-     // MARK: - Mood Chart
-     private var moodChartSection: some View {
+     private func moodChartSection(svm: StatsViewModel) -> some View {
          VStack(alignment: .leading, spacing: 12) {
              HStack {
                  Label("Mood Trend", systemImage: "chart.xyaxis.line").font(.headline)
@@ -85,7 +88,7 @@
                  .pickerStyle(.segmented).frame(width: 140)
              }
              
-             let history = statsVM.sentimentHistory
+             let history = svm.sentimentHistory
              if !history.isEmpty {
                  Chart {
                      ForEach(history, id: \.date) { item in
@@ -119,16 +122,13 @@
                      .frame(maxWidth: .infinity).padding()
              }
          }
-         .padding()
-         .background(Color(.systemGray6))
-         .clipShape(RoundedRectangle(cornerRadius: 16))
+         .padding().background(Color(.systemGray6)).clipShape(RoundedRectangle(cornerRadius: 16))
      }
      
-     // MARK: - Weekly Summaries
-     private var weeklySummarySection: some View {
+     private func weeklySummarySection(svm: StatsViewModel) -> some View {
          VStack(alignment: .leading, spacing: 8) {
              Label("Weekly Summary", systemImage: "calendar").font(.headline)
-             ForEach(statsVM.weeklyData.prefix(4), id: \.week) { week in
+             ForEach(svm.weeklyData.prefix(4), id: \.week) { week in
                  let summary = journalVM.weeklySummary(for: week.week)
                  HStack {
                      VStack(alignment: .leading, spacing: 4) {
@@ -138,35 +138,27 @@
                      }
                      Spacer()
                  }
-                 .padding(12)
-                 .background(Color(.systemBackground))
-                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                 .padding(12).background(Color(.systemBackground)).clipShape(RoundedRectangle(cornerRadius: 8))
              }
          }
-         .padding()
-         .background(Color(.systemGray6))
-         .clipShape(RoundedRectangle(cornerRadius: 16))
+         .padding().background(Color(.systemGray6)).clipShape(RoundedRectangle(cornerRadius: 16))
      }
      
-     // MARK: - Keywords
-     private var keywordsSection: some View {
+     private func keywordsSection(svm: StatsViewModel) -> some View {
          VStack(alignment: .leading, spacing: 8) {
              Label("Top Topics", systemImage: "tag").font(.headline)
              FlowLayout(spacing: 8) {
-                 ForEach(statsVM.topKeywords, id: \.self) { keyword in
+                 ForEach(svm.topKeywords, id: \.self) { keyword in
                      Text(keyword)
                          .font(.caption)
-                         .padding(.horizontal, 12)
-                         .padding(.vertical, 6)
+                         .padding(.horizontal, 12).padding(.vertical, 6)
                          .background(Color.blue.opacity(0.1))
                          .foregroundColor(.blue)
                          .clipShape(Capsule())
                  }
              }
          }
-         .padding()
-         .background(Color(.systemGray6))
-         .clipShape(RoundedRectangle(cornerRadius: 16))
+         .padding().background(Color(.systemGray6)).clipShape(RoundedRectangle(cornerRadius: 16))
      }
      
      // MARK: - Helpers
@@ -183,10 +175,13 @@
      }
      
      private func formatWeekLabel(_ weekId: String) -> String {
-         // weekId is "2026-W27"
+         guard !weekId.isEmpty else { return "N/A" }
          let parts = weekId.split(separator: "-")
-         guard parts.count == 2, parts[1].hasPrefix("W") else { return weekId }
-         return "Week \(parts[1].dropFirst())"
+         guard parts.count == 2, parts[1].hasPrefix("W"),
+               let weekNum = Int(parts[1].dropFirst()) else {
+             return weekId
+         }
+         return "Week \(weekNum)"
      }
  }
  
@@ -202,10 +197,8 @@
              Text(value).font(.title2).fontWeight(.bold)
              Text(title).font(.caption).foregroundColor(.secondary)
          }
-         .frame(maxWidth: .infinity)
-         .padding()
-         .background(Color(.systemGray6))
-         .clipShape(RoundedRectangle(cornerRadius: 12))
+         .frame(maxWidth: .infinity).padding()
+         .background(Color(.systemGray6)).clipShape(RoundedRectangle(cornerRadius: 12))
      }
  }
  
@@ -215,8 +208,9 @@
      
      func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
          guard !subviews.isEmpty else { return .zero }
-         
          let width = proposal.width ?? 0
+         guard width > 0 else { return .zero }
+         
          var height: CGFloat = 0
          var x: CGFloat = 0
          var y: CGFloat = 0
@@ -234,7 +228,7 @@
      }
      
      func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-         guard !subviews.isEmpty else { return }
+         guard !subviews.isEmpty, bounds.width > 0 else { return }
          
          var x = bounds.minX
          var y = bounds.minY
@@ -249,4 +243,12 @@
              x += size.width + spacing
          }
      }
+ }
+ 
+ // MARK: - Preview
+ #Preview("Stats with data") {
+     let preview = PersistenceController.preview
+     let vm = JournalViewModel(storage: StorageService(context: preview.container.viewContext))
+     StatsView()
+         .environment(vm)
  }

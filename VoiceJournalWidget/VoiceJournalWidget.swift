@@ -31,38 +31,42 @@
  
  // MARK: - Provider
  struct Provider: TimelineProvider {
+     /// Cache the Core Data container so we don't rebuild it every timeline refresh
+     private static var cachedContainer: NSPersistentContainer?
+     
+     private static func sharedContainer() -> NSPersistentContainer {
+         if let container = cachedContainer { return container }
+         
+         let container = NSPersistentContainer(name: "VoiceJournal")
+         let appGroup = "group.com.yourname.VoiceJournal"
+         if let groupURL = FileManager.default
+             .containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
+             container.persistentStoreDescriptions.first?.url =
+                 groupURL.appendingPathComponent("VoiceJournal.sqlite")
+         }
+         container.loadPersistentStores { _, error in
+             if error != nil { print("Widget CD error: \(error!.localizedDescription)") }
+         }
+         cachedContainer = container
+         return container
+     }
+     
      func placeholder(in context: Context) -> SimpleEntry {
          SimpleEntry(date: Date(), latestEntry: nil)
      }
      
      func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> Void) {
-         let summary = loadLatestEntry()
-         completion(SimpleEntry(date: Date(), latestEntry: summary))
+         completion(SimpleEntry(date: Date(), latestEntry: Self.loadLatestEntry()))
      }
      
      func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> Void) {
-         let summary = loadLatestEntry()
-         let entry = SimpleEntry(date: Date(), latestEntry: summary)
-         // Refresh every hour
+         let entry = SimpleEntry(date: Date(), latestEntry: Self.loadLatestEntry())
          let nextRefresh = Date().addingTimeInterval(3600)
-         let timeline = Timeline(entries: [entry], policy: .after(nextRefresh))
-         completion(timeline)
+         completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
      }
      
-     /// Reads the most recent JournalEntry from the shared App Groups store
-     private func loadLatestEntry() -> JournalEntrySummary? {
-         // Use same app group as main app to access shared Core Data
-         let appGroup = "group.com.yourname.VoiceJournal"
-         guard let groupURL = FileManager.default
-             .containerURL(forSecurityApplicationGroupIdentifier: appGroup) else { return nil }
-         
-         let storeURL = groupURL.appendingPathComponent("VoiceJournal.sqlite")
-         
-         let container = NSPersistentContainer(name: "VoiceJournal")
-         container.persistentStoreDescriptions.first?.url = storeURL
-         container.loadPersistentStores { _, error in
-             if error != nil { print("Widget CD load error: \(error!.localizedDescription)") }
-         }
+     private static func loadLatestEntry() -> JournalEntrySummary? {
+         let container = sharedContainer()
          
          let request = NSFetchRequest<NSManagedObject>(entityName: "JournalEntry")
          request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
@@ -81,14 +85,9 @@
              else { return "😔" }
          }()
          
-         let formatter = DateFormatter()
-         formatter.dateFormat = "MMM d"
-         
-         return JournalEntrySummary(
-             title: title,
-             emoji: emoji,
-             date: formatter.string(from: createdAt)
-         )
+         let f = DateFormatter()
+         f.dateFormat = "MMM d"
+         return JournalEntrySummary(title: title, emoji: emoji, date: f.string(from: createdAt))
      }
  }
  
@@ -99,13 +98,9 @@
      var body: some View {
          VStack(alignment: .leading, spacing: 8) {
              HStack {
-                 Image(systemName: "mic.circle.fill")
-                     .foregroundColor(.accentColor)
-                 Text("Voice Journal")
-                     .font(.caption)
-                     .fontWeight(.semibold)
+                 Image(systemName: "mic.circle.fill").foregroundColor(.accentColor)
+                 Text("Voice Journal").font(.caption).fontWeight(.semibold)
              }
-             
              if let latest = entry.latestEntry {
                  Text(latest.emoji).font(.largeTitle)
                  Text(latest.title).font(.caption).lineLimit(2)

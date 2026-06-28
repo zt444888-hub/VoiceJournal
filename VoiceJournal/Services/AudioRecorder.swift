@@ -1,8 +1,7 @@
  import Foundation
  import AVFoundation
  
- /// Manages audio file recording (.m4a). Does NOT configure AVAudioSession
- /// — JournalViewModel handles that centrally. NOT @Observable (inherits NSObject for delegate).
+ /// Manages audio file recording (.m4a). 22050Hz sample rate (optimal for speech).
  class AudioRecorder: NSObject {
      private var recorder: AVAudioRecorder?
      private(set) var isRecording = false
@@ -39,7 +38,7 @@
          
          let settings: [String: Any] = [
              AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-             AVSampleRateKey: 44100.0,
+             AVSampleRateKey: 22050.0,
              AVNumberOfChannelsKey: 1,
              AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
          ]
@@ -78,15 +77,26 @@
              try? FileManager.default.removeItem(at: url)
          }
      }
+     
+     // MARK: - Cleanup
+     /// Removes orphaned audio files not referenced by any current journal entry
+     static func cleanOrphanedAudioFiles(activeFileNames: Set<String>) {
+         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+         let audioDir = docs.appendingPathComponent("AudioRecordings", isDirectory: true)
+         guard let files = try? FileManager.default.contentsOfDirectory(atPath: audioDir.path) else { return }
+         for file in files {
+             if !activeFileNames.contains(file) {
+                 try? FileManager.default.removeItem(at: audioDir.appendingPathComponent(file))
+             }
+         }
+     }
  }
  
  // MARK: - AVAudioRecorderDelegate
  extension AudioRecorder: AVAudioRecorderDelegate {
      func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
          isRecording = false
-         if !flag {
-             onError?("Recording failed to complete")
-         }
+         if !flag { onError?("Recording failed to complete") }
      }
      
      func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {

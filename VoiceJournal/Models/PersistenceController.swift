@@ -1,83 +1,18 @@
-﻿ import CoreData
+ import CoreData
+ import Combine
  
  /// Core Data stack with CloudKit sync.
- /// Configure App Groups + set `sharedContainerURL` in init for widget data sharing.
+ /// Exposes `cloudKitAvailable` for UI to show sync status.
  struct PersistenceController {
      static let shared = PersistenceController()
-     static let appGroupIdentifier = "group.com.yourname.VoiceJournal"  // 鈫?MUST set in Xcode
+     static let appGroupIdentifier = "group.com.yourname.VoiceJournal"
      
      let container: NSPersistentCloudKitContainer
+     let cloudKitAvailable: CurrentValueSubject<Bool, Never>
      
-         private static func createProgrammaticModel() -> NSManagedObjectModel {
-        let model = NSManagedObjectModel()
-        let entryEntity = NSEntityDescription()
-        entryEntity.name = "JournalEntry"
-        entryEntity.managedObjectClassName = "JournalEntry"
-        
-        var properties: [NSPropertyDescription] = []
-        
-        let idProp = NSAttributeDescription()
-        idProp.name = "id"
-        idProp.attributeType = .UUIDAttributeType
-        idProp.isOptional = true
-        properties.append(idProp)
-        
-        let titleProp = NSAttributeDescription()
-        titleProp.name = "title"
-        titleProp.attributeType = .stringAttributeType
-        titleProp.isOptional = true
-        properties.append(titleProp)
-        
-        let transcriptProp = NSAttributeDescription()
-        transcriptProp.name = "transcriptText"
-        transcriptProp.attributeType = .stringAttributeType
-        transcriptProp.isOptional = true
-        properties.append(transcriptProp)
-        
-        let audioProp = NSAttributeDescription()
-        audioProp.name = "audioFileName"
-        audioProp.attributeType = .stringAttributeType
-        audioProp.isOptional = true
-        properties.append(audioProp)
-        
-        let sentimentProp = NSAttributeDescription()
-        sentimentProp.name = "sentimentScore"
-        sentimentProp.attributeType = .doubleAttributeType
-        sentimentProp.isOptional = false
-        sentimentProp.defaultValue = 0.0
-        properties.append(sentimentProp)
-        
-        let durationProp = NSAttributeDescription()
-        durationProp.name = "duration"
-        durationProp.attributeType = .doubleAttributeType
-        durationProp.isOptional = false
-        durationProp.defaultValue = 0.0
-        properties.append(durationProp)
-        
-        let createdAtProp = NSAttributeDescription()
-        createdAtProp.name = "createdAt"
-        createdAtProp.attributeType = .dateAttributeType
-        createdAtProp.isOptional = true
-        properties.append(createdAtProp)
-        
-        let updatedAtProp = NSAttributeDescription()
-        updatedAtProp.name = "updatedAt"
-        updatedAtProp.attributeType = .dateAttributeType
-        updatedAtProp.isOptional = true
-        properties.append(updatedAtProp)
-        let tagsProp = NSAttributeDescription()
-        tagsProp.name = "tags"
-        tagsProp.attributeType = .stringAttributeType
-        tagsProp.isOptional = true
-        tagsProp.defaultValue = ""
-        properties.append(tagsProp)
-        
-        entryEntity.properties = properties
-        model.entities = [entryEntity]
-        return model
-    }
-init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
-         container = NSPersistentCloudKitContainer(name: "VoiceJournal", managedObjectModel: Self.createProgrammaticModel())
+     init(inMemory: Bool = false) {
+         container = NSPersistentCloudKitContainer(name: "VoiceJournal")
+         cloudKitAvailable = CurrentValueSubject(false)
          
          guard let description = container.persistentStoreDescriptions.first else {
              fatalError("No persistent store description")
@@ -86,7 +21,6 @@ init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
          if inMemory {
              description.url = URL(fileURLWithPath: "/dev/null")
          } else {
-             // Use App Groups shared container so Widget can read the same data
              if let groupURL = FileManager.default
                  .containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier) {
                  let storeURL = groupURL.appendingPathComponent("VoiceJournal.sqlite")
@@ -99,9 +33,10 @@ init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
              containerIdentifier: "iCloud.com.yourname.VoiceJournal"
          )
          
-         container.loadPersistentStores { _, error in
-             if let error = error as NSError? {
-                 print("鈿狅笍 CloudKit not available, falling back: \(error.localizedDescription)")
+         container.loadPersistentStores { [self] _, error in
+             cloudKitAvailable.value = error == nil
+             if let error = error {
+                 print("⚠️ CloudKit fallback to local: \(error.localizedDescription)")
              }
          }
          
@@ -109,7 +44,6 @@ init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
          container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
      }
      
-     /// Saves only if there are uncommitted changes
      @discardableResult
      func save() -> Bool {
          let context = container.viewContext
@@ -118,17 +52,22 @@ init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
              try context.save()
              return true
          } catch {
-             print("鈿狅笍 Core Data save failed: \(error.localizedDescription)")
+             print("⚠️ Core Data save failed: \(error.localizedDescription)")
              return false
          }
      }
      
-     /// Creates a separate read-only context (for use in Widget)
+     /// Read-only context for Widget
      func newReadOnlyContext() -> NSManagedObjectContext {
          let ctx = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
          ctx.persistentStoreCoordinator = container.persistentStoreCoordinator
          ctx.automaticallyMergesChangesFromParent = true
+         ctx.mergePolicy = NSRollbackMergePolicy
          return ctx
+     }
+     
+     static func isCloudKitAvailable() -> Bool {
+         shared.cloudKitAvailable.value
      }
  }
  
@@ -150,5 +89,3 @@ init(inMemory: Bool = false, useProgrammaticModel: Bool = true) {
          return controller
      }()
  }
-
-

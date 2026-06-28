@@ -22,9 +22,7 @@
                      EditButton()
                  }
              }
-             .refreshable {
-                 journalVM.refreshEntries()
-             }
+             .refreshable { journalVM.refreshEntries() }
              .onAppear { journalVM.refreshEntries() }
          }
      }
@@ -32,17 +30,12 @@
      private var emptyState: some View {
          VStack(spacing: 16) {
              Image(systemName: "book.and.pencil")
-                 .font(.system(size: 48))
-                 .foregroundColor(.secondary)
-             Text("No entries yet")
-                 .font(.title3)
-                 .foregroundColor(.secondary)
+                 .font(.system(size: 48)).foregroundColor(.secondary)
+             Text("No entries yet").font(.title3).foregroundColor(.secondary)
              Text("Start by recording your first voice journal")
-                 .font(.subheadline)
-                 .foregroundColor(.tertiary)
+                 .font(.subheadline).foregroundColor(.tertiary)
          }
-         .frame(maxWidth: .infinity)
-         .padding(.vertical, 60)
+         .frame(maxWidth: .infinity).padding(.vertical, 60)
          .listRowBackground(Color.clear)
      }
      
@@ -69,9 +62,7 @@
                      }
                      .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                          Button(role: .destructive) {
-                             withAnimation {
-                                 journalVM.deleteEntry(entry)
-                             }
+                             withAnimation { journalVM.deleteEntry(entry) }
                          } label: {
                              Label("Delete", systemImage: "trash")
                          }
@@ -79,11 +70,9 @@
                  }
              } header: {
                  if key == "Today" || key == "Yesterday" {
-                     Text(key)
-                         .font(.headline)
+                     Text(key).font(.headline)
                  } else {
-                     Text(formattedDateHeader(key))
-                         .font(.headline)
+                     Text(formattedDateHeader(key)).font(.headline)
                  }
              }
          }
@@ -98,16 +87,12 @@
      }
      
      private func formattedDateHeader(_ dayId: String) -> String {
-         let parts = dayId.split(separator: "-").map(String.init)
-         guard parts.count == 3 else { return dayId }
-         let formatter = DateFormatter()
-         formatter.dateFormat = "yyyy-MM-dd"
-         if let date = formatter.date(from: dayId) {
-             let displayFormatter = DateFormatter()
-             displayFormatter.dateFormat = "EEEE, MMM d"
-             return displayFormatter.string(from: date)
-         }
-         return dayId
+         let f = DateFormatter()
+         f.dateFormat = "yyyy-MM-dd"
+         guard let date = f.date(from: dayId) else { return dayId }
+         let df = DateFormatter()
+         df.dateFormat = "EEEE, MMM d"
+         return df.string(from: date)
      }
  }
  
@@ -117,31 +102,27 @@
      
      var body: some View {
          HStack(spacing: 12) {
-             // Sentiment emoji
-             Text(entry.sentimentEmoji)
-                 .font(.title2)
-             
+             Text(entry.sentimentEmoji).font(.title2)
              VStack(alignment: .leading, spacing: 4) {
-                 Text(entry.safeTitle)
-                     .font(.body)
-                     .fontWeight(.medium)
-                     .lineLimit(1)
-                 
-                 Text(entry.formattedDate)
-                     .font(.caption)
-                     .foregroundColor(.secondary)
+                 Text(entry.safeTitle).font(.body).fontWeight(.medium).lineLimit(1)
+                 Text(entry.formattedDate).font(.caption).foregroundColor(.secondary)
              }
-             
              Spacer()
-             
              Text(entry.formattedDuration)
-                 .font(.caption2)
-                 .foregroundColor(.secondary)
-                 .padding(.horizontal, 8)
-                 .padding(.vertical, 3)
-                 .background(Color(.systemGray6))
-                 .clipShape(Capsule())
+                 .font(.caption2).foregroundColor(.secondary)
+                 .padding(.horizontal, 8).padding(.vertical, 3)
+                 .background(Color(.systemGray6)).clipShape(Capsule())
          }
          .padding(.vertical, 4)
+     }
+ }
+ 
+ // MARK: - Preview
+ #Preview("List with entries") {
+     let preview = PersistenceController.preview
+     let vm = JournalViewModel(storage: StorageService(context: preview.container.viewContext))
+     NavigationStack {
+         JournalListView()
+             .environment(vm)
      }
  }

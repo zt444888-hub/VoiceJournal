@@ -1,78 +1,80 @@
  # Voice Journal — On-Device AI Voice Diary
  
- Privacy-first voice journal app. **All processing on-device — zero server costs.**
+ Privacy-first voice journal. **All processing on-device — $0 running cost.**
  
- **Price:** $4.99 one-time purchase. **Cost to run:** $0/yr (Apple dev account $99 is a fixed cost, 24 sales covers it).
+ **Price:** $4.99 one-time purchase. **Break-even:** 24 sales covers the $99/year developer account.
  
- ## What Changed (Code Review Round)
+ ## What Changed (Code Review Fixes)
  
- | Issue | Fix |
- |---|---|
- | `@Observable` + `NSObject` conflict | Services: plain NSObject, no Observable macro. ViewModel: `@Observable`, single source of truth |
- | AVAudioSession conflict between SpeechService & AudioRecorder | Centralized in `JournalViewModel.startRecording()` — one config call |
- | NLTagger thread safety | Create fresh tagger per method call instead of reusing |
- | Widget can't read Core Data | App Groups shared container + widget reads it directly |
- | StatsView not reactive | `.onChange(of: journalVM.entries.count)` triggers auto-refresh |
- | `formatWeekLabel("2026-W27")` always returned raw string | Now correctly matches `W` prefix in second component |
- | FlowLayout crash on empty subviews | Early `.zero` return in `sizeThatFits` + `placeSubviews` |
- | Notifications scheduled without permission check | Check authorization before `add()` |
- | `@EnvironmentObject` with `@Observable` VM | Changed to `@Environment(JournalViewModel.self)` (iOS 17+ native) |
- | Core Data save swallows errors | `@discardableResult save() -> Bool` returns success state, logs on failure |
+ | # | Severity | Issue | File | Fix |
+ |---|---|---|---|---|
+ | 1 | **P0** | Audio playback silent | JournalDetailView | Added `AVAudioSession.setCategory(.playback)` before play |
+ | 2 | **P0** | Audio player leaks across entries | JournalDetailView | `onDisappear` stops player + sets nil + deactivates session |
+ | 3 | **P1** | Widget creates Core Data container every refresh | VoiceJournalWidget | Static `NSPersistentContainer` cache |
+ | 4 | **P1** | StatsViewModel uses independent StorageService | StatsView, StatsViewModel | Shares `journalVM.storage` |
+ | 5 | **P2** | 44100Hz sample rate overkill for speech | AudioRecorder | Reduced to 22050Hz (50% smaller files) |
+ | 6 | **P2** | en-US locale hardcoded | SpeechService | Detects user's English locale, falls back to en-US |
+ | 7 | **P2** | CloudKit failure invisible to user | PersistenceController | `cloudKitAvailable` publisher, queryable from UI |
+ | 8 | **P2** | Audio session not cleaned after playback | JournalDetailView | `stopPlayback()` deactivates session |
+ | 9 | **P3** | No xcode previews | All views | Added `#Preview` macros (5 views) |
+ | 10 | **P3** | No onboarding for first-time users | RecordView | Single-sheet onboarding with 3 steps |
+ | 11 | **P3** | `durationTimer` dead code | JournalViewModel | Removed unused property |
+ | 12 | **P3** | `refreshEntries()` called too often | JournalViewModel | Skip on count unchanged |
+ | 13 | **P3** | No app icon | README | Instructions to generate one free |
+ | 14 | **P3** | FlowLayout crash on zero width | StatsView | Early `return .zero` guard |
+ | 15 | **P3** | `formatWeekLabel` edge case | StatsView | Nil/empty guard + numeric extraction |
  
  ## Project Structure
  
  ```
  VoiceJournal/
- ├── VoiceJournalApp.swift               # @State JournalViewModel, .environment() injection
+ ├── VoiceJournalApp.swift
  ├── Models/
- │   ├── PersistenceController.swift      # Core Data + CloudKit + App Groups shared container
+ │   ├── PersistenceController.swift      # CloudKit + cloudKitAvailable publisher
  │   ├── JournalEntry+CoreDataClass.swift
- │   └── JournalEntry+CoreDataProperties.swift  # + Identifiable conformance
+ │   └── JournalEntry+CoreDataProperties.swift  # +Identifiable
  ├── Services/
- │   ├── SpeechService.swift             # SFSpeechRecognizer (NSObject, no @Observable)
- │   ├── AudioRecorder.swift             # AVAudioRecorder (NSObject, no @Observable)
- │   ├── SentimentAnalyzer.swift         # NaturalLanguage (fresh taggers per call)
- │   ├── StorageService.swift            # Core Data CRUD + stats queries
- │   ├── SummaryGenerator.swift          # Daily/weekly extractive summaries
- │   └── NotificationService.swift       # Local push reminders (checks authorization)
+ │   ├── SpeechService.swift             # Smarter en-* locale detection
+ │   ├── AudioRecorder.swift             # 22050Hz + orphan cleanup
+ │   ├── SentimentAnalyzer.swift         # Thread-safe (fresh taggers per call)
+ │   ├── StorageService.swift
+ │   ├── SummaryGenerator.swift
+ │   └── NotificationService.swift       # Authorization-checked scheduling
  ├── ViewModels/
- │   ├── JournalViewModel.swift           # @Observable, bridges service state, owns AVAudioSession
- │   └── StatsViewModel.swift            # @Observable, recalculates on demand
+ │   ├── JournalViewModel.swift           # @Observable, no dead code
+ │   └── StatsViewModel.swift            # Shares storage with JournalVM
  ├── Views/
- │   ├── RecordView.swift                # Mic button + live transcription + recent entries
- │   ├── JournalListView.swift           # Entries grouped by date, searchable, swipe-to-delete
- │   ├── JournalDetailView.swift         # Edit, play audio, AI insight card, mood bar
- │   └── StatsView.swift                 # Charts, weekly summaries, keyword tags + FlowLayout
- ├── VoiceJournal.xcdatamodeld/           # Core Data model (contains `contents`)
- ├── Resources/Info.plist                 # Microphone + Speech permissions
- └── PreviewContent/
- VoiceJournalWidget/                       # iOS Widget reading shared Core Data via App Groups
+ │   ├── RecordView.swift                # +Onboarding, +Preview
+ │   ├── JournalListView.swift           # +Preview
+ │   ├── JournalDetailView.swift         # Fixed playback, +Preview
+ │   └── StatsView.swift                 # FlowLayout guard, shared storage
+ ├── VoiceJournal.xcdatamodeld/
+ └── Resources/Info.plist
+ VoiceJournalWidget/                       # Cached Core Data container
  ├── VoiceJournalWidget.swift
  └── Info.plist
  ```
  
  ## Requirements
  
- - Xcode 15.0+
- - iOS 17.0+ (required by `@Observable`, Swift Charts, Layout protocol)
+ - Xcode 15.0+, iOS 17.0+
  - Apple Developer account ($99/year)
  
- ## Setup Instructions (on your Mac)
+ ## Setup Instructions
  
  ### 1. Create Xcode project
  
- 1. Xcode > File > New > Project > iOS > App
- 2. **Product Name:** `VoiceJournal` — **Interface:** SwiftUI — **Language:** Swift
- 3. Check **Use Core Data**, **Include Widget**
- 4. **Organization Identifier:** `com.yourname` (change `yourname` to your identifier)
+ Xcode > File > New > Project > iOS > App — name `VoiceJournal`, SwiftUI, Swift, 
+ check **Use Core Data** and **Include Widget**.
  
  ### 2. Add source files
  
- Drag the entire `work/voice-journal/VoiceJournal/` folder into the Xcode project navigator. Check **Copy if needed**.
+ Drag all files from this repo's `VoiceJournal/` and `VoiceJournalWidget/` into Xcode.
  
  ### 3. Core Data model
  
- The project already includes `VoiceJournal.xcdatamodeld/contents`. If Xcode created a default model, delete it and drag in this one. Verify the `JournalEntry` entity has exactly these attributes:
+ Replace the auto-generated `VoiceJournal.xcdatamodeld` with the one from this repo.
+ Verify `JournalEntry` entity has these attributes:
  
  | Attribute | Type | Optional | Default |
  |---|---|---|---|
@@ -85,19 +87,12 @@
  | createdAt | Date | YES | – |
  | updatedAt | Date | YES | – |
  
- ### 4. Configure Capabilities (two targets)
+ ### 4. Configure Capabilities
  
- **Main app target:**
- - `Signing & Capabilities` > `+` > **iCloud** > check **CloudKit**
- - `+` > **App Groups** > add `group.com.yourname.VoiceJournal`
- - `+` > **Background Modes** > check **Audio, AirPlay, and Picture in Picture**
- 
- **Widget extension target:**
- - `Signing & Capabilities` > `+` > **App Groups** > add **same** `group.com.yourname.VoiceJournal`
+ **Main app target:** iCloud (CloudKit) + App Groups (`group.com.yourname.VoiceJournal`) + Background Modes (Audio)
+ **Widget target:** App Groups (same identifier)
  
  ### 5. Update identifiers
- 
- All files use placeholder `com.yourname`. Replace with your actual bundle ID:
  
  | File | Replace |
  |---|---|
@@ -107,47 +102,49 @@
  | `VoiceJournalWidget.swift` | `group.com.yourname.VoiceJournal` |
  | `VoiceJournalWidget/Info.plist` | `com.yourname.VoiceJournal.widget` |
  
- ### 6. Sign & Run
+ ### 6. App icon (free)
  
- Select your team in Signing & Capabilities. Select an iOS 17+ simulator (or device). Press **Cmd+R**.
+ Go to [icon.kitchen](https://icon.kitchen) — search for "microphone" or "waveform" — 
+ generate a 1024x1024 icon. Download and drag into `Assets.xcassets/AppIcon`.
+ 
+ ### 7. Sign & Run
+ 
+ Cmd+R on an iOS 17+ simulator or device.
  
  ## Architecture
  
  ```
  User taps record
  ├─► JournalViewModel.startRecording()
- │   ├─► configures AVAudioSession ONCE (category: .record, mode: .measurement)
- │   ├─► AudioRecorder.startRecording()  ──  saves .m4a
- │   └─► SpeechService.startRecording()  ──  streams transcript via closure
+ │   ├─► configures AVAudioSession ONCE (.record, .measurement)
+ │   ├─► AudioRecorder.startRecording() → saves .m4a at 22050Hz
+ │   └─► SpeechService.startRecording() → streams transcript via closure
  │
  User taps stop
- ├─► JournalViewModel.stopRecording()
- │   ├─► SpeechService.stopRecording()          (no session toggle)
- │   ├─► AudioRecorder.stopRecording()          (returns .m4a URL)
- │   ├─► deactivates AVAudioSession once
- │   ├─► SentimentAnalyzer.analyzeSentiment()
- │   ├─► StorageService.createEntry()
- │   └─► refreshEntries()
- │
- StatsView
- └─► onAppear / onChange of entries.count ──► StatsViewModel.refresh()
+ ├─► SpeechService.stopRecording()       (no session toggle)
+ ├─► AudioRecorder.stopRecording()       (returns .m4a URL)
+ ├─► deactivates AVAudioSession
+ ├─► SentimentAnalyzer.analyzeSentiment()
+ ├─► StorageService.createEntry()
+ └─► refreshEntries()
  ```
  
  **Observation chain:**
- - `JournalViewModel` — `@Observable` in SwiftUI 17+ style
- - Services — plain `NSObject` subclasses, communicate via closures
- - Views — `@Environment(JournalViewModel.self)` reads state
+ - `JournalViewModel` ← `@Observable`
+ - Services ← plain `NSObject` (no Observable conflict)
+ - Views ← `@Environment(JournalViewModel.self)`
  
- ## ASO Keywords (for App Store)
+ **State flow:**
+ - `SpeechService` / `AudioRecorder` emit via closures → `JournalViewModel` updates `@Observable` properties → SwiftUI re-renders affected views
  
- `voice journal, diary, daily journal, mood tracker, AI journal, voice diary, speech to text, private journal, mood tracker`
+ ## ASO Keywords
  
+ `voice journal, diary, daily journal, mood tracker, AI journal, voice diary, speech to text, private journal`
  App Store category: **Health & Fitness > Journaling**
  
- ## V2 Ideas (no additional cost)
+ ## V2 Ideas
  
- - Widget with live entry preview (already scaffolded)
- - Apple Watch companion for on-the-go recording
- - iPad support with Scribble annotations
- - MLX integration for AI-generated weekly summaries (see `SentimentAnalyzer.swift` V2 note)
+ - Apple Watch companion
+ - MLX-powered AI weekly summaries
  - Export to PDF / JSON
+ - iPad + Scribble support
