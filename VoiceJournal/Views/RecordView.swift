@@ -5,6 +5,7 @@
      @Environment(JournalViewModel.self) private var journalVM
      @State private var showPermissionAlert = false
      @State private var showingSaved = false
+    private let prompts = ["What made you smile today?", "What is something you learned recently?", "Describe your perfect day.", "What are you grateful for?", "What challenge are you facing?", "What made today different from yesterday?", "Write about a person who inspires you.", "What is a goal you are working toward?", "Describe a place that makes you happy.", "What would you tell your younger self?"]
      @State private var showOnboarding = false
      
      private let hasSeenOnboardingKey = "hasSeenVoiceJournalOnboarding"
@@ -26,8 +27,13 @@
                  
                  Spacer()
              }
-             .padding()
-             .navigationTitle("Voice Journal")
+             .padding(.bottom, 60)
+             .navigationTitle("Voice Journal").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Voice Journal").font(.headline).fontWeight(.semibold)
+                }
+            }
              .navigationBarTitleDisplayMode(.large)
              .toolbar {
                  ToolbarItem(placement: .navigationBarTrailing) {
@@ -110,7 +116,7 @@
                  Text("Start Journaling")
                      .font(.headline)
                      .frame(maxWidth: .infinity)
-                     .padding()
+                     .padding(.bottom, 60)
                      .background(LinearGradient(colors: [.blue, .purple],
                          startPoint: .leading, endPoint: .trailing))
                      .foregroundColor(.white)
@@ -120,7 +126,6 @@
              .padding(.bottom, 40)
          }
          .presentationDetents([.medium, .large])
-         .interactiveDismissDisabled()
      }
      
      // MARK: - Record Button
@@ -131,24 +136,26 @@
                  return
              }
              if journalVM.isRecording {
-                 withAnimation(.spring(response: 0.3)) { journalVM.stopRecording() }
+                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    withAnimation(.spring(response: 0.3)) { journalVM.stopRecording() }
                  withAnimation(.easeInOut(duration: 0.5)) { showingSaved = true }
                  DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                      withAnimation(.easeInOut(duration: 0.3)) { showingSaved = false }
                  }
              } else {
-                 withAnimation(.spring(response: 0.3)) { journalVM.startRecording() }
+                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.spring(response: 0.3)) { journalVM.startRecording() }
              }
          } label: {
              ZStack {
                  Circle()
                      .fill(journalVM.isRecording ? Color.red.opacity(0.15) : Color.blue.opacity(0.1))
-                     .frame(width: 200, height: 200)
+                     .frame(width: min(geo.size.width * 0.6, 200), height: min(geo.size.width * 0.6, 200))
                  Circle()
                      .fill(journalVM.isRecording
                          ? LinearGradient(colors: [.red, .orange], startPoint: .top, endPoint: .bottom)
                          : LinearGradient(colors: [.blue, .purple], startPoint: .top, endPoint: .bottom))
-                     .frame(width: 140, height: 140)
+                     .frame(width: min(geo.size.width * 0.4, 140), height: min(geo.size.width * 0.4, 140))
                  Image(systemName: journalVM.isRecording ? "stop.fill" : "mic.fill")
                      .font(.system(size: 48))
                      .foregroundColor(.white)
@@ -156,7 +163,7 @@
              }
          }
          .buttonStyle(.plain)
-         .scaleEffect(journalVM.isRecording ? 1.1 : 1.0)
+         .scaleEffect(journalVM.isRecording ? 1.05 : 1.0)
          .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: journalVM.isRecording)
      }
      
@@ -176,7 +183,7 @@
                  Text("Tap to record your thoughts")
                      .font(.headline).foregroundColor(.secondary)
                  Text("All data stays on your device")
-                     .font(.caption).foregroundColor(.tertiary)
+                     .font(.caption).foregroundColor(Color.secondary)
              }
          }
      }
@@ -190,7 +197,7 @@
                  Text(journalVM.liveTranscript.isEmpty ? "Speak now..." : journalVM.liveTranscript)
                      .font(.body)
                      .foregroundColor(journalVM.liveTranscript.isEmpty ? .secondary : .primary)
-                     .frame(maxWidth: .infinity, alignment: .leading).padding()
+                     .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 60)
              }
              .frame(height: journalVM.isRecording ? 120 : 200)
              .background(Color(.systemGray6))

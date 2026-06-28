@@ -1,5 +1,6 @@
 ﻿import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 struct SettingsView: View {
     @Environment(JournalViewModel.self) private var journalVM
@@ -12,9 +13,10 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
+                    Toggle("Daily Reminder", isOn: Binding(get: { true }, set: { if $0 { UNUserNotificationCenter.current().requestAuthorization(options: [.alert,.sound]) { _, _ in } } }))
                     VStack(spacing: 8) {
                         Image(systemName: "mic.circle.fill")
-                            .font(.system(size: 40)).foregroundStyle(.accentColor)
+                            .font(.system(size: 40)).foregroundStyle(.tint)
                         Text("VoiceJournal").font(.title2.weight(.bold))
                         Text("Your private voice diary").font(.subheadline).foregroundColor(.secondary)
                     }
@@ -88,7 +90,7 @@ struct SettingsView: View {
                         Text("Version"); Spacer(); Text("1.0").foregroundColor(.secondary)
                     }
                     HStack {
-                        Text("Daily Free Limit"); Spacer(); Text("\(StoreManager.freeDailyLimit)/day").foregroundColor(.secondary)
+                        Text("Daily Free Limit"); Spacer(); Text("\(StoreManager.shared.freeDailyLimit)/day").foregroundColor(.secondary)
                     }
                 }
             }

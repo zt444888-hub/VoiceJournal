@@ -23,6 +23,7 @@
                  }
              }
              .refreshable { journalVM.refreshEntries() }
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Add Sample", systemImage: "plus.circle") { journalVM.addSampleData() } } }
              .onAppear { journalVM.refreshEntries() }
          }
      }
@@ -33,7 +34,7 @@
                  .font(.system(size: 48)).foregroundColor(.secondary)
              Text("No entries yet").font(.title3).foregroundColor(.secondary)
              Text("Start by recording your first voice journal")
-                 .font(.subheadline).foregroundColor(.tertiary)
+                 .font(.subheadline).foregroundColor(Color.secondary)
          }
          .frame(maxWidth: .infinity).padding(.vertical, 60)
          .listRowBackground(Color.clear)
@@ -119,10 +120,10 @@
  
  // MARK: - Preview
  #Preview("List with entries") {
-     let preview = PersistenceController.preview
-     let vm = JournalViewModel(storage: StorageService(context: preview.container.viewContext))
      NavigationStack {
          JournalListView()
-             .environment(vm)
+             .environment(JournalViewModel())
      }
  }
+
+

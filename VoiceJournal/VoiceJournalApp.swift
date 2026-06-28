@@ -4,11 +4,20 @@
  @main
  struct VoiceJournalApp: App {
      @State private var journalVM = JournalViewModel()
+    @State private var biometricLock = BiometricLockService()
      
      var body: some Scene {
          WindowGroup {
-             ContentView()
-                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+             ZStack {                Color(.systemBackground).ignoresSafeArea()
+            ContentView()
+            if biometricLock.isLocked {
+                BiometricLockView()
+                    .environment(biometricLock)
+                    .transition(.opacity)
+                    .zIndex(100)
+            }
+        }
+        .animation(.default, value: biometricLock.isLocked)
                  .environment(journalVM)
                  .onAppear {
                      UNUserNotificationCenter.current().requestAuthorization(
@@ -37,6 +46,30 @@
                  .tabItem { Label("Insights", systemImage: "chart.xyaxis.line") }
                  .tag(2)
          }
-         .tint(.accentColor)
+         .background(Color(.systemBackground))        .background(Color(.systemBackground)).tint(.accentColor)
      }
  }
+
+
+// MARK: - Biometric Lock
+struct BiometricLockView: View {
+    @Environment(BiometricLockService.self) private var lock
+    
+    var body: some View {
+        ZStack {                Color(.systemBackground).ignoresSafeArea()
+            Color(.systemBackground).ignoresSafeArea()
+            VStack(spacing: 24) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 72))
+                    .foregroundStyle(.tint)
+                Text("Voice Journal").font(.title2).fontWeight(.bold)
+                Text("Locked").foregroundColor(.secondary)
+                Button("Unlock") {
+                    Task { await lock.authenticate() }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        }
+    }
+}

@@ -15,14 +15,13 @@
      var errorMessage: String?
      var isAuthorized = false
      var entries: [JournalEntry] = []
-     var isCloudKitAvailable = true
-     
+      
      // MARK: - Services
      private let speechService = SpeechService()
      private let audioRecorder = AudioRecorder()
      private let sentimentAnalyzer = SentimentAnalyzer()
      let storage: StorageService
-     private lazy var summaryGenerator = SummaryGenerator(storage: storage)
+     @ObservationIgnored private lazy var summaryGenerator = SummaryGenerator(storage: storage)
      private let notificationService = NotificationService()
      
      private var lastEntryCount = 0
@@ -31,9 +30,7 @@
          self.storage = storage
          
          // Bridge updates from non-observable services
-         speechService.onTranscriptUpdate = { [weak self] text in
-             self?.liveTranscript = text
-         }
+
          speechService.onError = { [weak self] msg in
              self?.errorMessage = msg
          }
@@ -44,13 +41,15 @@
              self?.errorMessage = msg
          }
          
-         // Track CloudKit availability
-         isCloudKitAvailable = PersistenceController.isCloudKitAvailable()
+         
+         
      }
      
      // MARK: - Permissions
      func requestPermissions() async {
-         let micStatus = await AVAudioSession.sharedInstance().requestRecordPermission()
+         let micStatus = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
+            AVAudioSession.sharedInstance().requestRecordPermission { g in c.resume(returning: g) }
+        }
          let speechGranted = await speechService.requestAuthorization()
          isAuthorized = micStatus && speechGranted
          notificationService.requestAuthorization()
@@ -58,7 +57,11 @@
      
      // MARK: - Recording
      func startRecording() {
-         guard isAuthorized else {
+         guard AVAudioSession.sharedInstance().isInputAvailable else {
+            errorMessage = "No microphone available"
+            return
+        }
+        guard isAuthorized else {
              errorMessage = "Microphone and speech recognition permissions required"
              return
          }
@@ -73,7 +76,7 @@
              errorMessage = nil
              
              try audioRecorder.startRecording()
-             try speechService.startRecording(audioSessionPreconfigured: true)
+             // speech recognition will happen after recording stops
              isRecording = true
          } catch {
              errorMessage = "Failed to start recording: \(error.localizedDescription)"
@@ -82,7 +85,7 @@
      }
      
      func stopRecording() {
-         speechService.stopRecording(deactivateSession: false)
+         // speech service no longer uses live recording
          let audioURL = audioRecorder.stopRecording()
          isRecording = false
          
@@ -111,7 +114,7 @@
      }
      
      func cancelRecording() {
-         speechService.stopRecording(deactivateSession: false)
+         // speech service no longer uses live recording
          if let url = audioRecorder.currentFilePath {
              try? FileManager.default.removeItem(at: url)
          }
@@ -145,7 +148,24 @@
      }
      
      /// Removes audio files not referenced by any entry (prevents orphan accumulation)
-     func cleanOrphanedAudioFiles() {
+     func exportCSV() -> URL? {
+        return ExportService.exportToCSV(entries: entries)
+    }
+    
+    func exportJSON() -> URL? {
+        return ExportService.exportToJSON(entries: entries)
+    }
+    
+    
+    func addSampleData() {
+        for i in 0..<4 {
+            let titles = ["Great day at work", "Meeting with friends", "Morning reflection", "Evening thoughts", "Weekend plan", "Learning Swift", "Beach walk", "Book review"]
+            let texts = ["Today was really productive. I finished the main feature and got great feedback from the team.", "Had coffee with old friends. We talked about travel plans and future goals.", "Woke up early and went for a run. The weather was perfect.", "Feeling grateful for everything today. Small wins add up.", "Planning a hiking trip this weekend. Really looking forward to it.", "Spent the afternoon learning about SwiftUI animations. Amazing what you can do with iOS 17.", "Walked along the beach at sunset. The waves were calming.", "Finished reading Atomic Habits. Highly recommend it to everyone."]
+            let entry = storage.createEntry(title: titles[i % titles.count], transcript: texts[i % texts.count], audioFileName: nil, sentimentScore: [-0.2, 0.8, 0.5, 0.1, 0.9, 0.6, 0.7, 0.3][i], duration: Double.random(in: 30...120))
+        }
+        refreshEntries()
+    }
+    func cleanOrphanedAudioFiles() {
          let activeFiles = Set(storage.fetchAllEntries().compactMap(\.audioFileName))
          AudioRecorder.cleanOrphanedAudioFiles(activeFileNames: activeFiles)
      }

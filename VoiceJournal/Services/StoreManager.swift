@@ -15,14 +15,12 @@ final class StoreManager {
     // Free tier limit
     let freeDailyLimit = 3
     
-    private var updatesTask: Task<Void, Never>?
+    // transactions handled in init
     
     private init() {
-        updatesTask = listenForTransactions()
+        listenForTransactions()
         Task { await loadProduct() }
     }
-    
-    deinit { updatesTask?.cancel() }
     
     func loadProduct() async {
         isLoading = true
@@ -80,7 +78,7 @@ final class StoreManager {
         }
     }
     
-    private func listenForTransactions() -> Task<Void, Never> {
+    private func listenForTransactions() {
         Task.detached { [weak self] in
             for await result in Transaction.updates {
                 if case .verified(let transaction) = result {

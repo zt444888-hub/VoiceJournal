@@ -61,7 +61,7 @@
                  .font(.system(size: 48)).foregroundColor(.secondary)
              Text("No data yet").font(.title3).foregroundColor(.secondary)
              Text("Record some journal entries to see insights")
-                 .font(.subheadline).foregroundColor(.tertiary)
+                 .font(.subheadline).foregroundColor(Color.secondary)
          }
          .frame(maxWidth: .infinity).padding(.vertical, 60)
      }
@@ -247,8 +247,8 @@
  
  // MARK: - Preview
  #Preview("Stats with data") {
-     let preview = PersistenceController.preview
-     let vm = JournalViewModel(storage: StorageService(context: preview.container.viewContext))
      StatsView()
-         .environment(vm)
+         .environment(JournalViewModel())
  }
+
+
